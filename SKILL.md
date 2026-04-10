@@ -1,6 +1,6 @@
 ---
 name: skill-vetter
-version: 1.1.0
+version: 1.2.0
 user-invocable: true
 description: "Multi-scanner security gate with AI-guided sandbox recommendations. TRIGGER when: user mentions installing, adding, or reviewing a skill to Claude Code, OpenClaw, or any other AI agent. Detects malicious code, contract violations, tampering, and suspicious patterns."
 ---
@@ -63,6 +63,10 @@ Fields:
 - `sandbox_reason`: human-readable rationale
 - `has_executable`: `true` if the skill contains scripts or compiled code
 - `failures` / `warnings`: numeric counts from static scan
+- `sandbox_run`: `true` if sandbox was executed
+- `sandbox_violations`: `true` if sandbox detected violations
+- `llm_judge_run`: `true` if the LLM judge scanner was executed
+- `llm_judge_score`: risk score string from LLM judge (e.g., `"6"`) or `""` if skipped
 
 ### 2. Read the skill description
 
@@ -129,6 +133,7 @@ Then show the combined static + sandbox report and ask for final approval.
 | secrets-scan | Hardcoded API keys, tokens, credentials |
 | structure-check | Missing SKILL.md, malformed YAML, dangerous shell commands |
 | contract-check | Capability contract violations, workspace tampering, undeclared permissions |
+| llm-judge | LLM-as-a-Judge semantic scan for prompt injection, social engineering, and deceptive behavior |
 
 ## Example Output
 
@@ -138,11 +143,12 @@ SKILL VETTER — Security Scan: malicious-skill
 Path: /tmp/skill-vetter-abc123/malicious-skill
 ════════════════════════════════════════════════════════════
 
-[1/5] aguara............. ✅ PASS
-[2/5] skill-analyzer..... ❌ FAIL (HIGH: prompt injection pattern)
-[3/5] secrets-scan....... ⚠️  WARN (Medium: base64 encoded string)
-[4/5] structure-check.... ✅ PASS
-[5/5] contract-check..... ❌ FAIL (workspace tampering detected)
+[1/6] aguara............. ✅ PASS
+[2/6] skill-analyzer..... ❌ FAIL (HIGH: prompt injection pattern)
+[3/6] secrets-scan....... ⚠️  WARN (Medium: base64 encoded string)
+[4/6] structure-check.... ✅ PASS
+[5/6] contract-check..... ❌ FAIL (workspace tampering detected)
+[6/6] llm-judge.......... ⚠️  WARN (risk 6 — prompt injection pattern detected)
 
 ════════════════════════════════════════════════════════════
 VERDICT: 🚫 BLOCKED
@@ -154,7 +160,7 @@ Do NOT install this skill. Issues found:
 - MEDIUM: Base64 encoded string in scripts/run.sh (line 12)
 - FAIL: Workspace config tampering detected
 
-META: {"sandbox_recommended":"strongly","sandbox_reason":"Static findings present + executable code","has_executable":true,"failures":2,"warnings":1}
+META: {"sandbox_recommended":"strongly","sandbox_reason":"Static findings present + executable code","has_executable":true,"failures":2,"warnings":1,"sandbox_run":false,"sandbox_violations":0,"llm_judge_run":true,"llm_judge_score":"6"}
 ```
 
 ## Dependencies
