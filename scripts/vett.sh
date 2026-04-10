@@ -57,7 +57,7 @@ append() {
 # ── Scanner 1: aguara (prompt injection detection) ──────────────────────────
 
 scan_aguara() {
-    echo "[1/4] aguara............."
+    echo "[1/5] aguara............."
     
     if ! command -v aguara &>/dev/null; then
         append "⚠️  aguara not installed — skipping"
@@ -95,7 +95,7 @@ scan_aguara() {
 # ── Scanner 2: skill-analyzer (Cisco vulnerability scanner) ────────────────
 
 scan_skill_analyzer() {
-    echo "[2/4] skill-analyzer....."
+    echo "[2/5] skill-analyzer....."
     
     if ! command -v skill-scanner &>/dev/null; then
         append "⚠️  skill-scanner not installed — skipping"
@@ -131,7 +131,7 @@ scan_skill_analyzer() {
 # ── Scanner 3: secrets-scan (hardcoded credentials) ─────────────────────────
 
 scan_secrets() {
-    echo "[3/4] secrets-scan......."
+    echo "[3/5] secrets-scan......."
     
     local found_secrets=0
     
@@ -163,7 +163,7 @@ scan_secrets() {
 # ── Scanner 4: structure-check (required files, dangerous patterns) ─────────
 
 scan_structure() {
-    echo "[4/4] structure-check...."
+    echo "[4/5] structure-check...."
     
     local issues=0
     
@@ -201,12 +201,110 @@ scan_structure() {
     fi
 }
 
+# ── Scanner 5: contract-check (capability declarations vs inferred behavior) ─
+
+scan_contract() {
+    echo "[5/5] contract-check....."
+
+    local frontmatter=""
+    local has_frontmatter=0
+    local issues=0
+
+    # Extract YAML frontmatter if present
+    if [ -f "$SKILL_DIR/SKILL.md" ]; then
+        if head -1 "$SKILL_DIR/SKILL.md" | grep -q '^---'; then
+            frontmatter=$(sed -n '1,/^---$/p' "$SKILL_DIR/SKILL.md")
+            has_frontmatter=1
+        fi
+    fi
+
+    # Parse declared capabilities from frontmatter (case-insensitive)
+    local declared_network=0 declared_exec=0 declared_write=0
+    local declared_broad=0
+
+    if [ "$has_frontmatter" -eq 1 ]; then
+        if echo "$frontmatter" | grep -qiE '(allowed-tools|allowedTools|tools):\s*\*'; then
+            declared_broad=1
+        fi
+        if echo "$frontmatter" | grep -qiE 'permissions:\s*\[\s*\*\s*\]'; then
+            declared_broad=1
+        fi
+        if echo "$frontmatter" | grep -qiE '(network|web|http|api|url|curl|fetch)'; then
+            declared_network=1
+        fi
+        if echo "$frontmatter" | grep -qiE '(exec|shell|bash|system|command|subprocess|spawn)'; then
+            declared_exec=1
+        fi
+        if echo "$frontmatter" | grep -qiE '(write|edit|modify|update|create|delete|remove)'; then
+            declared_write=1
+        fi
+    fi
+
+    # Infer actual behaviors from all files
+    local has_network=0 has_exec=0 has_write=0 has_tamper=0
+
+    if grep -rqEi '\b(curl|wget|fetch|urllib|requests\.|axios|http\.Client|node-fetch|\$http)\b' "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" --include="*.ts" --include="*.go" --include="*.md" 2>/dev/null; then
+        has_network=1
+    fi
+    if grep -rqEi '\b(eval|exec\s|subprocess|os\.system|child_process|spawn\s|system\s*\()' "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" --include="*.ts" --include="*.go" --include="*.md" 2>/dev/null; then
+        has_exec=1
+    fi
+    if grep -rqEi '(writeFile|fwrite|file_put_contents|open\s*\(.*['\''\"]?w|>\s*[^>]|>>\s*)' "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" --include="*.ts" --include="*.go" --include="*.md" 2>/dev/null; then
+        has_write=1
+    fi
+    if grep -rqEi '\b(write|edit|modify|update|create|append|inject|persist)\b.*\b(\.claude/|CLAUDE\.md|AGENTS\.md|TOOLS\.md|\.bashrc|\.zshrc|\.profile|authorized_keys|crontab)\b' "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" --include="*.ts" --include="*.go" --include="*.md" 2>/dev/null; then
+        has_tamper=1
+    fi
+    if grep -rqEi '(>|>>)\s*.*\b(\.claude/|CLAUDE\.md|AGENTS\.md|TOOLS\.md|\.bashrc|\.zshrc|\.profile|authorized_keys|crontab)\b' "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" --include="*.ts" --include="*.go" --include="*.md" 2>/dev/null; then
+        has_tamper=1
+    fi
+
+    # Evaluate contract violations
+    if [ "$declared_broad" -eq 1 ]; then
+        append "⚠️  contract-check: Overly broad permission declaration detected (wildcard tools or permissions)"
+        ((WARNINGS++)) || true
+    fi
+
+    if [ "$has_tamper" -eq 1 ]; then
+        append "❌ contract-check: Workspace config tampering detected (attempts to modify agent trust-boundary files)"
+        ((issues++)) || true
+    fi
+
+    if [ "$has_exec" -eq 1 ] && [ "$declared_exec" -eq 0 ] && [ "$has_frontmatter" -eq 1 ]; then
+        append "⚠️  contract-check: Undeclared code execution capability (eval/exec/subprocess found but not declared in frontmatter)"
+        ((WARNINGS++)) || true
+    fi
+
+    if [ "$has_network" -eq 1 ] && [ "$declared_network" -eq 0 ] && [ "$has_frontmatter" -eq 1 ]; then
+        append "⚠️  contract-check: Undeclared network capability (curl/requests/fetch found but not declared in frontmatter)"
+        ((WARNINGS++)) || true
+    fi
+
+    if [ "$has_write" -eq 1 ] && [ "$declared_write" -eq 0 ] && [ "$has_frontmatter" -eq 1 ]; then
+        append "⚠️  contract-check: Undeclared filesystem write capability (write patterns found but not declared in frontmatter)"
+        ((WARNINGS++)) || true
+    fi
+
+    if [ "$has_frontmatter" -eq 0 ]; then
+        append "ℹ️  contract-check: No YAML frontmatter found — capability contract cannot be verified"
+    fi
+
+    if [ $issues -gt 0 ]; then
+        echo "                      ❌ FAIL ($issues issues)"
+        ((FAILURES++)) || true
+    else
+        append "✅ contract-check: Capability contract consistent"
+        echo "                      ✅ PASS"
+    fi
+}
+
 # ── Run all scanners ────────────────────────────────────────────────────────
 
 scan_aguara
 scan_skill_analyzer
 scan_secrets
 scan_structure
+scan_contract
 
 # ── Generate verdict ────────────────────────────────────────────────────────
 
