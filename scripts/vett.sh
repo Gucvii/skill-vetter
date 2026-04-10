@@ -306,6 +306,35 @@ scan_secrets
 scan_structure
 scan_contract
 
+# ── Determine sandbox recommendation ────────────────────────────────────────
+
+# Detect if skill contains executable code
+local has_executable=0
+if find "$SKILL_DIR" -maxdepth 2 \( -name "*.sh" -o -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.go" -o -name "Makefile" -o -name "package.json" -o -name "pyproject.toml" \) | read; then
+    has_executable=1
+fi
+
+local sandbox_rec="skip"
+local sandbox_reason="No executable code detected and static scan passed"
+
+if [ $FAILURES -gt 0 ] || [ $WARNINGS -gt 0 ]; then
+    if [ "$has_executable" -eq 1 ]; then
+        sandbox_rec="strongly"
+        sandbox_reason="Static findings present + executable code"
+    else
+        sandbox_rec="recommended"
+        sandbox_reason="Static findings present; limited executable surface"
+    fi
+else
+    if [ "$has_executable" -eq 1 ]; then
+        sandbox_rec="recommended"
+        sandbox_reason="Static scan passed but executable code present"
+    else
+        sandbox_rec="skip"
+        sandbox_reason="No executable code and static scan clean"
+    fi
+fi
+
 # ── Generate verdict ────────────────────────────────────────────────────────
 
 echo ""
@@ -318,6 +347,8 @@ if [ $FAILURES -gt 0 ]; then
     echo ""
     echo "Do NOT install this skill. Issues found:"
     echo -e "$REPORT"
+    echo ""
+    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings}')"
     exit 1
 elif [ $WARNINGS -gt 0 ]; then
     echo "VERDICT: ⚠️  REVIEW NEEDED"
@@ -326,6 +357,8 @@ elif [ $WARNINGS -gt 0 ]; then
     echo ""
     echo "Review these findings before installing:"
     echo -e "$REPORT"
+    echo ""
+    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings}')"
     exit 0
 else
     echo "VERDICT: ✅ SAFE"
@@ -333,5 +366,7 @@ else
     echo "════════════════════════════════════════════════════════════"
     echo ""
     echo -e "$REPORT"
+    echo ""
+    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings}')"
     exit 0
 fi
