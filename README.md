@@ -4,16 +4,10 @@ Multi-scanner security gate for AI agent skills. Run before installing any skill
 
 ## Installation
 
-**One-liner** (installs prerequisites + skill):
-
-```bash
-bash <(curl -s https://raw.githubusercontent.com/app-incubator-xyz/skill-vetter/master/scripts/install.sh)
-```
-
 **Claude Code:**
 
 ```bash
-git clone https://github.com/app-incubator-xyz/skill-vetter.git ~/.claude/skills/skill-vetter
+git clone https://github.com/Gucvii/skill-vetter.git ~/.claude/skills/skill-vetter
 ```
 
 **OpenClaw (via ClawHub):**
@@ -24,7 +18,7 @@ clawhub install skill-vetter
 
 **From within a Claude Code session:**
 
-> Ask Claude: "Install skill-vetter from https://github.com/app-incubator-xyz/skill-vetter"
+> Ask Claude: "Install skill-vetter from https://github.com/Gucvii/skill-vetter"
 
 Works out of the box with basic scanners (secrets + structure checks). Install `aguara` and `skill-scanner` for full coverage — run `bash scripts/check-deps.sh` to see what's missing.
 
@@ -93,8 +87,8 @@ VERDICT: 🚫 BLOCKED
 
 | Scanner | What It Checks |
 |---------|----------------|
-| [aguara](https://github.com/garagon/aguara) | Prompt injection, obfuscation, suspicious LLM calls |
-| [skill-scanner](https://pypi.org/project/cisco-ai-skill-scanner/) | Known malicious patterns, CVE database |
+| [aguara](https://github.com/Gucvii/aguara) | Prompt injection, obfuscation, suspicious LLM calls |
+| [skill-scanner](https://github.com/Gucvii/skill-scanner) | Known malicious patterns, CVE database |
 | secrets-scan | Hardcoded API keys, tokens, credentials |
 | structure-check | Missing SKILL.md, malformed YAML, dangerous shell commands |
 
@@ -108,8 +102,8 @@ VERDICT: 🚫 BLOCKED
 
 ## Dependencies
 
-- [aguara](https://github.com/garagon/aguara) — prompt injection scanner
-- [skill-scanner](https://pypi.org/project/cisco-ai-skill-scanner/) — Cisco AI vulnerability scanner
+- [aguara](https://github.com/Gucvii/aguara) — prompt injection scanner
+- [skill-scanner](https://github.com/Gucvii/skill-scanner) — Cisco AI vulnerability scanner
 - `python3`, `curl`, `jq`, `git`
 
 ## License

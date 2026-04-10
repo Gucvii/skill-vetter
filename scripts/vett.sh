@@ -62,7 +62,7 @@ scan_aguara() {
     if ! command -v aguara &>/dev/null; then
         append "⚠️  aguara not installed — skipping"
         echo "                      ⚠️  SKIP — not installed"
-        echo "                         https://github.com/garagon/aguara"
+        echo "                         https://github.com/Gucvii/aguara"
         return 0
     fi
     
@@ -100,7 +100,7 @@ scan_skill_analyzer() {
     if ! command -v skill-scanner &>/dev/null; then
         append "⚠️  skill-scanner not installed — skipping"
         echo "                      ⚠️  SKIP — not installed"
-        echo "                         https://pypi.org/project/cisco-ai-skill-scanner/"
+        echo "                         https://github.com/Gucvii/skill-scanner"
         return 0
     fi
 
@@ -179,7 +179,7 @@ scan_structure() {
     fi
     
     # Check for dangerous commands in scripts and code
-    if grep -rqE "(rm -rf|curl.*\|.*bash|wget.*\|.*sh|eval\s|exec\s)" "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" --exclude="vett.sh" 2>/dev/null; then
+    if grep -rqE "(rm -rf|curl.*\|.*bash|wget.*\|.*sh|eval\s|exec\s)" "$SKILL_DIR" --include="*.sh" --include="*.py" --include="*.js" 2>/dev/null; then
         append "❌ structure-check: Dangerous shell commands detected"
         ((issues++)) || true
     fi

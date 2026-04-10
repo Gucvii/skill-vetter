@@ -2,11 +2,10 @@
 # install.sh — install skill-vetter and its dependencies
 # Usage:
 #   bash install.sh                    (from cloned repo)
-#   bash <(curl -s https://raw.githubusercontent.com/app-incubator-xyz/skill-vetter/master/scripts/install.sh)
 
 set -euo pipefail
 
-REPO_URL="https://github.com/app-incubator-xyz/skill-vetter.git"
+REPO_URL="https://github.com/Gucvii/skill-vetter.git"
 SKILL_NAME="skill-vetter"
 
 echo ""
@@ -54,7 +53,7 @@ if command -v aguara &>/dev/null; then
     echo "  ✅ aguara"
 else
     echo "  ⚠️  aguara not installed"
-    echo "     See: https://github.com/garagon/aguara"
+    echo "     See: https://github.com/Gucvii/aguara"
     skipped+=("aguara")
 fi
 
@@ -63,7 +62,7 @@ if command -v skill-scanner &>/dev/null; then
     echo "  ✅ skill-scanner"
 else
     echo "  ⚠️  skill-scanner not installed"
-    echo "     See: https://pypi.org/project/cisco-ai-skill-scanner/"
+    echo "     See: https://github.com/Gucvii/skill-scanner"
     skipped+=("skill-scanner")
 fi
 
