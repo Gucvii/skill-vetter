@@ -63,7 +63,7 @@ else
                 skipped+=("aguara")
             fi
         else
-            if go install github.com/garagon/aguara/cmd/aguara@latest 2>/dev/null; then
+            if go install github.com/Gucvii/aguara/cmd/aguara@latest 2>/dev/null; then
                 installed+=("aguara")
             else
                 echo "     See: https://github.com/Gucvii/aguara"
@@ -121,7 +121,7 @@ else
                 skipped+=("greywall")
             fi
         else
-            if go install github.com/GreyhavenHQ/greywall/cmd/greywall@latest 2>/dev/null; then
+            if go install github.com/Gucvii/greywall/cmd/greywall@latest 2>/dev/null; then
                 installed+=("greywall")
             else
                 echo "     See: https://github.com/Gucvii/greywall"
