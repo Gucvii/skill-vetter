@@ -66,6 +66,15 @@ else
     skipped+=("skill-scanner")
 fi
 
+# greywall (optional — for sandbox runtime verification)
+if command -v greywall &>/dev/null; then
+    echo "  ✅ greywall"
+else
+    echo "  ⚠️  greywall not installed (optional, required for --sandbox mode)"
+    echo "     See: https://github.com/Gucvii/greywall"
+    skipped+=("greywall")
+fi
+
 # git, curl — just check, don't try to install
 for tool in git curl; do
     if command -v "$tool" &>/dev/null; then
@@ -160,4 +169,5 @@ fi
 echo ""
 echo "  Usage:  /skill-vetter <skill-name>"
 echo "  Or:     bash $SKILL_SRC/scripts/vett.sh <skill-name>"
+echo "          bash $SKILL_SRC/scripts/vett.sh <skill-name> --sandbox"
 echo "════════════════════════════════════════════════════════════"

@@ -8,8 +8,23 @@ set -euo pipefail
 export PATH="$HOME/go/bin:$PATH"
 
 INPUT="${1:-}"
+USE_SANDBOX=0
+
+# Parse optional flags
+for arg in "$@"; do
+    case "$arg" in
+        --sandbox)
+            USE_SANDBOX=1
+            shift
+            ;;
+    esac
+done
+
+# Re-assign INPUT after shift
+INPUT="${1:-}"
+
 if [ -z "$INPUT" ]; then
-    echo "Usage: bash vett.sh <skill-name | github-url | local-path>"
+    echo "Usage: bash vett.sh <skill-name | github-url | local-path> [--sandbox]"
     exit 1
 fi
 
@@ -49,6 +64,8 @@ echo ""
 FAILURES=0
 WARNINGS=0
 REPORT=""
+SANDBOX_RUN=0
+SANDBOX_VIOLATIONS=0
 
 append() {
     REPORT="${REPORT}\n$1"
@@ -306,6 +323,104 @@ scan_secrets
 scan_structure
 scan_contract
 
+# ── Sandbox phase (runtime verification) ────────────────────────────────────
+
+run_sandbox() {
+    echo ""
+    echo "════════════════════════════════════════════════════════════"
+    echo "SANDBOX PHASE — Runtime behavior verification"
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+
+    if ! command -v greywall &>/dev/null; then
+        append "⚠️  sandbox: greywall not installed — skipping"
+        echo "                      ⚠️  SKIP — greywall not installed"
+        echo "                         https://github.com/Gucvii/greywall"
+        return 0
+    fi
+
+    # Detect executable entry point
+    local sandbox_cmd=""
+    local detected_desc=""
+
+    if [ -f "$SKILL_DIR/scripts/run.sh" ]; then
+        sandbox_cmd="cd '$SKILL_DIR' && timeout 15s bash scripts/run.sh"
+        detected_desc="scripts/run.sh"
+    elif [ -f "$SKILL_DIR/run.sh" ]; then
+        sandbox_cmd="cd '$SKILL_DIR' && timeout 15s bash run.sh"
+        detected_desc="run.sh"
+    elif [ -f "$SKILL_DIR/Makefile" ]; then
+        sandbox_cmd="cd '$SKILL_DIR' && (timeout 15s make test || timeout 15s make run)"
+        detected_desc="Makefile"
+    elif [ -f "$SKILL_DIR/main.py" ]; then
+        sandbox_cmd="cd '$SKILL_DIR' && timeout 15s python3 main.py"
+        detected_desc="main.py"
+    elif [ -f "$SKILL_DIR/package.json" ]; then
+        sandbox_cmd="cd '$SKILL_DIR' && (timeout 15s npm test || timeout 15s npm start)"
+        detected_desc="package.json"
+    elif [ -f "$SKILL_DIR/main.go" ]; then
+        sandbox_cmd="cd '$SKILL_DIR' && timeout 15s go run main.go"
+        detected_desc="main.go"
+    fi
+
+    if [ -z "$sandbox_cmd" ]; then
+        append "ℹ️  sandbox: No executable entry point detected — skipping"
+        echo "                      ℹ️  SKIP — no entry point"
+        return 0
+    fi
+
+    echo "▸ Detected entry point: $detected_desc"
+    echo "▸ Running in greywall sandbox (15s timeout)..."
+    echo ""
+
+    local greywall_log
+    greywall_log=$(mktemp /tmp/skill-vetter-greywall-XXXXXX.log)
+
+    # Run greywall with monitor and debug output
+    local exit_code=0
+    greywall --monitor -d -c "$sandbox_cmd" >"$greywall_log" 2>&1 || exit_code=$?
+
+    if [ "$exit_code" -eq 0 ]; then
+        echo "                      ✅ PASS (exit 0)"
+    elif [ "$exit_code" -eq 124 ]; then
+        echo "                      ⚠️  TIMEOUT (15s limit reached)"
+    else
+        echo "                      ⚠️  EXIT $exit_code"
+    fi
+
+    # Analyze log for violations / blocked actions
+    local violations=0
+    if grep -qiE "blocked|denied|violation" "$greywall_log"; then
+        violations=1
+    fi
+
+    SANDBOX_RUN=1
+    if [ "$violations" -eq 1 ]; then
+        SANDBOX_VIOLATIONS=1
+        append "❌ sandbox: Greywall detected blocked actions or violations"
+        echo ""
+        echo "Violation summary:"
+        grep -iE "blocked|denied|violation" "$greywall_log" | head -10
+        ((FAILURES++)) || true
+    else
+        append "✅ sandbox: No sandbox violations detected"
+        echo "                      ✅ PASS"
+    fi
+
+    # Show network / filesystem insights if any
+    if grep -qi "sandbox" "$greywall_log" && [ "$violations" -eq 0 ]; then
+        echo ""
+        echo "Sandbox log highlights:"
+        grep -iE "(proxy|network|filesystem|landlock|seccomp)" "$greywall_log" | head -10 || true
+    fi
+
+    rm -f "$greywall_log"
+}
+
+if [ "$USE_SANDBOX" -eq 1 ]; then
+    run_sandbox
+fi
+
 # ── Determine sandbox recommendation ────────────────────────────────────────
 
 # Detect if skill contains executable code
@@ -335,6 +450,19 @@ else
     fi
 fi
 
+# ── Adjust recommendation if sandbox was actually run ───────────────────────
+
+if [ "$USE_SANDBOX" -eq 1 ] && [ "$SANDBOX_RUN" -eq 1 ]; then
+    if [ "$SANDBOX_VIOLATIONS" -eq 1 ]; then
+        sandbox_reason="$sandbox_reason; sandbox detected violations"
+        if [ "$sandbox_rec" != "strongly" ]; then
+            sandbox_rec="strongly"
+        fi
+    else
+        sandbox_reason="$sandbox_reason; sandbox passed without violations"
+    fi
+fi
+
 # ── Generate verdict ────────────────────────────────────────────────────────
 
 echo ""
@@ -348,7 +476,7 @@ if [ $FAILURES -gt 0 ]; then
     echo "Do NOT install this skill. Issues found:"
     echo -e "$REPORT"
     echo ""
-    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings}')"
+    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" --argjson sandbox_run "$SANDBOX_RUN" --argjson sandbox_violations "$SANDBOX_VIOLATIONS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings, sandbox_run: $sandbox_run, sandbox_violations: $sandbox_violations}')"
     exit 1
 elif [ $WARNINGS -gt 0 ]; then
     echo "VERDICT: ⚠️  REVIEW NEEDED"
@@ -358,7 +486,7 @@ elif [ $WARNINGS -gt 0 ]; then
     echo "Review these findings before installing:"
     echo -e "$REPORT"
     echo ""
-    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings}')"
+    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" --argjson sandbox_run "$SANDBOX_RUN" --argjson sandbox_violations "$SANDBOX_VIOLATIONS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings, sandbox_run: $sandbox_run, sandbox_violations: $sandbox_violations}')"
     exit 0
 else
     echo "VERDICT: ✅ SAFE"
@@ -367,6 +495,6 @@ else
     echo ""
     echo -e "$REPORT"
     echo ""
-    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings}')"
+    echo "META: $(jq -nc --arg rec "$sandbox_rec" --arg reason "$sandbox_reason" --argjson exec "$has_executable" --argjson failures "$FAILURES" --argjson warnings "$WARNINGS" --argjson sandbox_run "$SANDBOX_RUN" --argjson sandbox_violations "$SANDBOX_VIOLATIONS" '{sandbox_recommended: $rec, sandbox_reason: $reason, has_executable: $exec, failures: $failures, warnings: $warnings, sandbox_run: $sandbox_run, sandbox_violations: $sandbox_violations}')"
     exit 0
 fi
