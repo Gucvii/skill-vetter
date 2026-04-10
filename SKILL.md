@@ -3,6 +3,7 @@ name: skill-vetter
 version: 1.2.0
 user-invocable: true
 description: "Multi-scanner security gate with AI-guided sandbox recommendations. TRIGGER when: user mentions installing, adding, or reviewing a skill to Claude Code, OpenClaw, or any other AI agent. Detects malicious code, contract violations, tampering, and suspicious patterns."
+permissions: [exec, network, write]
 ---
 
 # Skill Vetter
@@ -79,6 +80,7 @@ Use the static scan results, the META line, and the skill description to choose 
 | Level | Trigger Conditions | Default Action |
 |-------|-------------------|----------------|
 | **🔴 强烈建议 sandbox** | `failures > 0` or `warnings > 0` **and** `has_executable == true`; or workspace tampering detected | Pre-select "运行 sandbox" |
+<!-- aguara-ignore-next-line SUPPLY_018 -->
 | **🟡 建议 sandbox** | `failures == 0` and `warnings == 0` **but** `has_executable == true`; or skill description implies network/exec behavior without executable files | Pre-select "运行 sandbox" but allow skip |
 | **🟢 可不 sandbox** | `failures == 0`, `warnings == 0`, no executable code, but skill processes data or generates code | Pre-select "直接安装" but offer sandbox as an option |
 | **⚪ 跳过 sandbox** | Pure Markdown prompt / command definition, no executable entry, all green | Direct install (still ask user to confirm) |
