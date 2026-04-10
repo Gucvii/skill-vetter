@@ -512,13 +512,13 @@ fi
 # ── Determine sandbox recommendation ────────────────────────────────────────
 
 # Detect if skill contains executable code
-local has_executable=0
+has_executable=0
 if find "$SKILL_DIR" -maxdepth 2 \( -name "*.sh" -o -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.go" -o -name "Makefile" -o -name "package.json" -o -name "pyproject.toml" \) | read; then
     has_executable=1
 fi
 
-local sandbox_rec="skip"
-local sandbox_reason="No executable code detected and static scan passed"
+sandbox_rec="skip"
+sandbox_reason="No executable code detected and static scan passed"
 
 if [ $FAILURES -gt 0 ] || [ $WARNINGS -gt 0 ]; then
     if [ "$has_executable" -eq 1 ]; then

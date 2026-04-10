@@ -52,27 +52,87 @@ fi
 if command -v aguara &>/dev/null; then
     echo "  ✅ aguara"
 else
-    echo "  ⚠️  aguara not installed"
-    echo "     See: https://github.com/Gucvii/aguara"
-    skipped+=("aguara")
+    echo "  ⏳ Installing aguara..."
+    if command -v go &>/dev/null; then
+        mkdir -p "$HOME/go/bin"
+        if [ -d "../aguara-fork" ] && [ -f "../aguara-fork/go.mod" ]; then
+            if (cd "../aguara-fork" && go build -o "$HOME/go/bin/aguara" ./cmd/aguara); then
+                installed+=("aguara")
+            else
+                echo "     Failed to build local aguara fork"
+                skipped+=("aguara")
+            fi
+        else
+            if go install github.com/garagon/aguara/cmd/aguara@latest 2>/dev/null; then
+                installed+=("aguara")
+            else
+                echo "     See: https://github.com/Gucvii/aguara"
+                skipped+=("aguara")
+            fi
+        fi
+    else
+        echo "  ⚠️  aguara not installed (Go required)"
+        echo "     See: https://github.com/Gucvii/aguara"
+        skipped+=("aguara")
+    fi
 fi
 
 # skill-scanner
 if command -v skill-scanner &>/dev/null; then
     echo "  ✅ skill-scanner"
 else
-    echo "  ⚠️  skill-scanner not installed"
-    echo "     See: https://github.com/Gucvii/skill-scanner"
-    skipped+=("skill-scanner")
+    echo "  ⏳ Installing skill-scanner..."
+    if command -v pipx &>/dev/null; then
+        if pipx install cisco-ai-skill-scanner >/dev/null 2>&1; then
+            installed+=("skill-scanner")
+        else
+            echo "     Failed to install via pipx"
+            skipped+=("skill-scanner")
+        fi
+    elif command -v pip3 &>/dev/null; then
+        if pip3 install --quiet --user cisco-ai-skill-scanner 2>/dev/null; then
+            installed+=("skill-scanner")
+        elif pip3 install --quiet --break-system-packages cisco-ai-skill-scanner 2>/dev/null; then
+            installed+=("skill-scanner")
+        else
+            echo "     Failed to install via pip3"
+            echo "     Try: brew install pipx && pipx install cisco-ai-skill-scanner"
+            skipped+=("skill-scanner")
+        fi
+    else
+        echo "  ⚠️  skill-scanner not installed (pip3 or pipx required)"
+        echo "     See: https://github.com/Gucvii/skill-scanner"
+        skipped+=("skill-scanner")
+    fi
 fi
 
 # greywall (optional — for sandbox runtime verification)
 if command -v greywall &>/dev/null; then
     echo "  ✅ greywall"
 else
-    echo "  ⚠️  greywall not installed (optional, required for --sandbox mode)"
-    echo "     See: https://github.com/Gucvii/greywall"
-    skipped+=("greywall")
+    echo "  ⏳ Installing greywall (optional)..."
+    if command -v go &>/dev/null; then
+        mkdir -p "$HOME/go/bin"
+        if [ -d "../greywall-fork" ] && [ -f "../greywall-fork/go.mod" ]; then
+            if (cd "../greywall-fork" && go build -o "$HOME/go/bin/greywall" ./cmd/greywall); then
+                installed+=("greywall")
+            else
+                echo "     Failed to build local greywall fork"
+                skipped+=("greywall")
+            fi
+        else
+            if go install github.com/GreyhavenHQ/greywall/cmd/greywall@latest 2>/dev/null; then
+                installed+=("greywall")
+            else
+                echo "     See: https://github.com/Gucvii/greywall"
+                skipped+=("greywall")
+            fi
+        fi
+    else
+        echo "  ⚠️  greywall not installed (optional, Go required)"
+        echo "     See: https://github.com/Gucvii/greywall"
+        skipped+=("greywall")
+    fi
 fi
 
 # git, curl — just check, don't try to install
